@@ -1,133 +1,102 @@
 require('dotenv').config();
-const { WebClient } = require('@slack/web-api');
+const { App } = require('@slack/bolt');
 
-const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
+const app = new App({
+    token: process.env.SLACK_BOT_TOKEN,
+    signingSecret: process.env.SLACK_SIGNING_SECRET,
+    socketMode: false
+});
 
-async function testBot() {
-    console.log('🧪 Testando SlackRat Bot\n');
+async function testChannelAccess() {
+    console.log('🧪 Testando acesso aos canais...\n');
     
     try {
-        // 1. Testar autenticação
-        console.log('1️⃣ Testando autenticação...');
-        const auth = await slackClient.auth.test();
-        console.log(`✅ Bot autenticado: @${auth.user} (${auth.user_id})`);
-        console.log(`   Workspace: ${auth.team} (${auth.team_id})`);
+        // 1. Verificar autenticação
+        const auth = await app.client.auth.test();
+        console.log(`✅ Bot autenticado: @${auth.user}`);
         
-        // 2. Testar permissões básicas
-        console.log('\n2️⃣ Testando permissões básicas...');
-        try {
-            const users = await slackClient.users.list();
-            console.log(`✅ users:read - OK (${users.members.length} usuários encontrados)`);
-        } catch (error) {
-            console.log(`❌ users:read - FALHOU: ${error.message}`);
-        }
+        // 2. Buscar canal específico slackrattest
+        const targetChannel = 'slackrattest';
+        console.log(`\n🔍 Procurando canal "${targetChannel}"...`);
         
-        // 3. Testar acesso a canais públicos
-        console.log('\n3️⃣ Testando acesso a canais públicos...');
+        // Método 1: Tentar buscar diretamente
         try {
-            const publicChannels = await slackClient.conversations.list({
-                types: 'public_channel'
+            const channelInfo = await app.client.conversations.info({
+                channel: targetChannel
             });
-            console.log(`✅ channels:read - OK (${publicChannels.channels.length} canais públicos)`);
-        } catch (error) {
-            console.log(`❌ channels:read - FALHOU: ${error.message}`);
-        }
-        
-        // 4. Testar acesso a canais privados
-        console.log('\n4️⃣ Testando acesso a canais privados...');
-        try {
-            const privateChannels = await slackClient.conversations.list({
-                types: 'private_channel'
-            });
-            console.log(`✅ groups:read - OK (${privateChannels.channels.length} canais privados)`);
+            console.log(`✅ Canal encontrado via info: #${channelInfo.channel.name} (${channelInfo.channel.id})`);
+            console.log(`   Tipo: ${channelInfo.channel.is_private ? 'Privado' : 'Público'}`);
+            console.log(`   Bot é membro: ${channelInfo.channel.is_member ? 'SIM' : 'NÃO'}`);
             
-            // Procurar pelo canal slackrattest
-            const canalEncontrado = privateChannels.channels.find(c => c.name === 'slackrattest');
-            if (canalEncontrado) {
-                console.log(`✅ Canal #slackrattest encontrado!`);
-                console.log(`   ID: ${canalEncontrado.id}`);
-                console.log(`   Bot é membro: ${canalEncontrado.is_member ? 'Sim' : 'Não'}`);
-                
-                // 5. Testar acesso ao histórico do canal
-                console.log('\n5️⃣ Testando acesso ao histórico...');
-                try {
-                    const history = await slackClient.conversations.history({
-                        channel: canalEncontrado.id,
-                        limit: 10
-                    });
-                    console.log(`✅ groups:history - OK`);
-                    console.log(`   Mensagens encontradas: ${history.messages ? history.messages.length : 0}`);
-                    
-                    if (history.messages && history.messages.length > 0) {
-                        console.log('\n📝 Últimas mensagens:');
-                        history.messages.slice(0, 3).forEach((msg, i) => {
-                            const text = msg.text ? msg.text.substring(0, 100) + '...' : 'Sem texto';
-                            console.log(`   ${i + 1}. ${text}`);
-                        });
-                        
-                        // 6. Testar busca específica por "Round"
-                        console.log('\n6️⃣ Testando busca por "Round"...');
-                        const keyword = 'Round';
-                        const matches = history.messages.filter(msg => 
-                            msg.text && msg.text.toLowerCase().includes(keyword.toLowerCase())
-                        );
-                        
-                        console.log(`   Mensagens com "${keyword}": ${matches.length}`);
-                        if (matches.length > 0) {
-                            matches.forEach((msg, i) => {
-                                console.log(`   ✅ ${i + 1}. ${msg.text}`);
-                            });
-                        }
-                    }
-                    
-                } catch (historyError) {
-                    console.log(`❌ groups:history - FALHOU: ${historyError.message}`);
-                }
-                
-            } else {
-                console.log(`❌ Canal #slackrattest não encontrado!`);
-                console.log('\n📋 Canais privados disponíveis:');
-                privateChannels.channels.forEach(channel => {
-                    console.log(`   - #${channel.name} (${channel.is_private ? 'privado' : 'público'})`);
+            if (channelInfo.channel.is_member) {
+                // Tentar buscar histórico
+                console.log('\n📖 Testando acesso ao histórico...');
+                const history = await app.client.conversations.history({
+                    channel: channelInfo.channel.id,
+                    limit: 5
                 });
+                
+                console.log(`✅ Consegui acessar! ${history.messages.length} mensagens recentes`);
+                
+                // Buscar por "Round"
+                const keyword = 'round';
+                console.log(`\n🔍 Buscando por "${keyword}"...`);
+                
+                const allMessages = await app.client.conversations.history({
+                    channel: channelInfo.channel.id,
+                    limit: 1000
+                });
+                
+                const matches = allMessages.messages.filter(msg => 
+                    msg.text && msg.text.toLowerCase().includes(keyword.toLowerCase())
+                );
+                
+                console.log(`✅ Encontradas ${matches.length} menções a "${keyword}"`);
+                
+                if (matches.length > 0) {
+                    console.log('\nPrimeiras 3 menções:');
+                    matches.slice(0, 3).forEach((msg, i) => {
+                        console.log(`${i + 1}. "${msg.text.substring(0, 100)}..."`);
+                    });
+                }
+            } else {
+                console.log('\n⚠️  O bot NÃO é membro deste canal!');
+                console.log('   Execute no Slack: /invite @SlackRat');
             }
-            
         } catch (error) {
-            console.log(`❌ groups:read - FALHOU: ${error.message}`);
+            console.log(`❌ Erro ao buscar canal: ${error.message}`);
         }
         
-        // 7. Testar permissão de escrita
-        console.log('\n7️⃣ Testando permissão de escrita...');
+        // 3. Listar canais onde o bot é membro (para referência)
+        console.log('\n📋 Canais onde o bot é membro:');
+        console.log('================================');
+        
         try {
-            const testMessage = await slackClient.chat.postMessage({
-                channel: auth.user_id, // DM para o próprio bot
-                text: '🧪 Teste de permissão de escrita'
+            const memberChannels = await app.client.users.conversations({
+                user: auth.user_id,
+                types: 'public_channel,private_channel'
             });
-            console.log(`✅ chat:write - OK`);
-            // Deletar a mensagem de teste
-            await slackClient.chat.delete({
-                channel: auth.user_id,
-                ts: testMessage.ts
-            });
+            
+            if (memberChannels.channels && memberChannels.channels.length > 0) {
+                memberChannels.channels.forEach(channel => {
+                    const type = channel.is_private ? '🔒 Privado' : '📢 Público';
+                    console.log(`✅ ${type} #${channel.name} (${channel.id})`);
+                });
+            } else {
+                console.log('❌ Bot não é membro de nenhum canal');
+            }
         } catch (error) {
-            console.log(`❌ chat:write - FALHOU: ${error.message}`);
+            console.log(`❌ Erro ao listar canais: ${error.message}`);
         }
         
     } catch (error) {
-        console.error('❌ Erro geral:', error.message);
+        console.error('❌ Erro:', error.message);
+        if (error.data) {
+            console.error('Detalhes:', error.data);
+        }
     }
-    
-    console.log('\n🔍 RESUMO DAS PERMISSÕES:');
-    console.log('Para o bot funcionar, precisa de:');
-    console.log('✅ groups:read - Listar canais privados');
-    console.log('✅ groups:history - Ler histórico de canais privados');
-    console.log('✅ channels:read - Listar canais públicos');
-    console.log('✅ channels:history - Ler histórico de canais públicos');
-    console.log('✅ users:read - Obter informações de usuários');
-    console.log('✅ chat:write - Enviar mensagens');
-    console.log('✅ im:history - Ler histórico de DMs');
-    console.log('✅ im:write - Enviar DMs');
 }
 
-testBot();
+// Executar teste
+testChannelAccess();
 

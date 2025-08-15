@@ -9,21 +9,21 @@ const app = new App({
   port: process.env.PORT || 3000
 });
 
-
-
-// Comando de busca principal
+// Comando de busca principal CORRIGIDO
 app.message(/^search\s+(.+?)\s+(.+)$/i, async ({ message, say, client }) => {
   try {
     const [, channelPart, keyword] = message.text.match(/^search\s+(.+?)\s+(.+)$/i);
     
     // Limpar o nome do canal (remover formatação do Slack)
     let channelName = channelPart;
+    let channelId = null;
     
-    // Se for formato <#ID|nome>, extrair o nome
+    // Se for formato <#ID|nome>, extrair o nome E o ID
     if (channelPart.includes('|')) {
       const match = channelPart.match(/<#([A-Z0-9]+)\|([^>]+)>/);
       if (match) {
-        channelName = match[2]; // Usar o nome, não o ID
+        channelId = match[1]; // ID do canal
+        channelName = match[2]; // Nome do canal
       }
     }
     
@@ -31,16 +31,41 @@ app.message(/^search\s+(.+?)\s+(.+)$/i, async ({ message, say, client }) => {
     channelName = channelName.replace(/^#/, '');
     
     console.log(`🔍 Busca solicitada: canal="${channelName}", palavra="${keyword}"`);
+    if (channelId) {
+      console.log(`   ID do canal: ${channelId}`);
+    }
     
     // Responder imediatamente
     await say(`🔍 Buscando por "${keyword}" no canal #${channelName}...`);
     
-    // Buscar o canal
-    const channels = await client.conversations.list({
-      types: 'public_channel,private_channel'
-    });
+    let channel = null;
     
-    const channel = channels.channels.find(c => c.name === channelName);
+    // CORREÇÃO: Se temos o ID, usar diretamente
+    if (channelId) {
+      try {
+        const channelInfo = await client.conversations.info({
+          channel: channelId
+        });
+        channel = channelInfo.channel;
+        console.log(`✅ Canal encontrado via ID: ${channel.name} (${channel.id})`);
+      } catch (error) {
+        console.log(`❌ Erro ao buscar canal por ID: ${error.message}`);
+      }
+    }
+    
+    // Se não encontrou por ID, tentar por nome
+    if (!channel) {
+      console.log('🔍 Tentando buscar canal por nome...');
+      
+      // CORREÇÃO 1: Buscar canais privados corretamente
+      const channels = await client.conversations.list({
+        types: 'public_channel,private_channel',
+        exclude_archived: true,
+        limit: 1000
+      });
+      
+      channel = channels.channels.find(c => c.name === channelName);
+    }
     
     if (!channel) {
       await say(`❌ Canal #${channelName} não encontrado. Verifique o nome do canal.`);
@@ -48,6 +73,14 @@ app.message(/^search\s+(.+?)\s+(.+)$/i, async ({ message, say, client }) => {
     }
     
     console.log(`✅ Canal encontrado: ${channel.name} (ID: ${channel.id})`);
+    console.log(`   Tipo: ${channel.is_private ? 'Privado' : 'Público'}`);
+    console.log(`   Bot é membro: ${channel.is_member ? 'SIM' : 'NÃO'}`);
+    
+    // CORREÇÃO 2: Verificar se bot é membro
+    if (!channel.is_member) {
+      await say(`❌ Bot não é membro do canal #${channelName}. Use /invite @SlackRat no canal.`);
+      return;
+    }
     
     // Buscar histórico do canal
     const result = await client.conversations.history({
@@ -111,9 +144,10 @@ app.message(/^search\s+(.+?)\s+(.+)$/i, async ({ message, say, client }) => {
     
     const validMessages = processedMessages.filter(msg => msg !== null);
     
-    // Gerar resumo
+    // Gerar resumo melhorado
     let summary = `🔍 *Busca por "${keyword}" no canal #${channelName}*\n`;
-    summary += `📊 *${validMessages.length} mensagens encontradas*\n\n`;
+    summary += `📊 *${validMessages.length} mensagens encontradas*\n`;
+    summary += `📝 *Total de mensagens analisadas: ${result.messages.length}*\n\n`;
     
     // Agrupar por usuário
     const userCounts = {};
