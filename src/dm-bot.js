@@ -42,10 +42,36 @@ function verifySlackSignature(req, res, next) {
 async function searchChannelHistory(channelName, keyword) {
     try {
         // Encontrar o canal pelo nome (incluindo canais privados)
-        const channels = await slackClient.conversations.list({
-            types: 'public_channel,private_channel'
-        });
-        const channel = channels.channels.find(c => c.name === channelName);
+        // CORREÇÃO: Buscar canais públicos e privados separadamente devido a limitação da API
+        let allChannels = [];
+        
+        try {
+            // Buscar canais públicos
+            const publicChannels = await slackClient.conversations.list({
+                types: 'public_channel',
+                exclude_archived: true
+            });
+            allChannels = allChannels.concat(publicChannels.channels);
+            console.log(`   Canais públicos encontrados: ${publicChannels.channels.length}`);
+        } catch (error) {
+            console.log(`   Erro ao buscar canais públicos: ${error.message}`);
+        }
+        
+        try {
+            // Buscar canais privados
+            const privateChannels = await slackClient.conversations.list({
+                types: 'private_channel',
+                exclude_archived: true
+            });
+            allChannels = allChannels.concat(privateChannels.channels);
+            console.log(`   Canais privados encontrados: ${privateChannels.channels.length}`);
+        } catch (error) {
+            console.log(`   Erro ao buscar canais privados: ${error.message}`);
+        }
+        
+        console.log(`   Total de canais para busca: ${allChannels.length}`);
+        
+        const channel = allChannels.find(c => c.name === channelName);
         
         if (!channel) {
             throw new Error(`Canal #${channelName} não encontrado`);

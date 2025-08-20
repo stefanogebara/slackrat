@@ -198,3 +198,5 @@ O usuário agora pode usar o bot via Direct Message, mantendo os canais limpos e
 **Data**: Janeiro 2024
 **Versão**: 1.0.0
 
+
+

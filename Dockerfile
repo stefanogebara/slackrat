@@ -15,3 +15,5 @@ EXPOSE 3000
 # Comando para executar o bot de DM
 CMD ["node", "src/dm-bot.js"]
 
+
+
