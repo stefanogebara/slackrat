@@ -57,14 +57,36 @@ app.message(/^search\s+(.+?)\s+(.+)$/i, async ({ message, say, client }) => {
     if (!channel) {
       console.log('🔍 Tentando buscar canal por nome...');
       
-      // CORREÇÃO 1: Buscar canais privados corretamente
-      const channels = await client.conversations.list({
-        types: 'public_channel,private_channel',
-        exclude_archived: true,
-        limit: 1000
-      });
+      // CORREÇÃO: Buscar canais públicos e privados separadamente devido a limitação da API
+      let allChannels = [];
       
-      channel = channels.channels.find(c => c.name === channelName);
+      try {
+        // Buscar canais públicos
+        const publicChannels = await client.conversations.list({
+          types: 'public_channel',
+          exclude_archived: true
+        });
+        allChannels = allChannels.concat(publicChannels.channels);
+        console.log(`   Canais públicos encontrados: ${publicChannels.channels.length}`);
+      } catch (error) {
+        console.log(`   Erro ao buscar canais públicos: ${error.message}`);
+      }
+      
+      try {
+        // Buscar canais privados
+        const privateChannels = await client.conversations.list({
+          types: 'private_channel',
+          exclude_archived: true
+        });
+        allChannels = allChannels.concat(privateChannels.channels);
+        console.log(`   Canais privados encontrados: ${privateChannels.channels.length}`);
+      } catch (error) {
+        console.log(`   Erro ao buscar canais privados: ${error.message}`);
+      }
+      
+      console.log(`   Total de canais para busca: ${allChannels.length}`);
+      
+      channel = allChannels.find(c => c.name === channelName);
     }
     
     if (!channel) {

@@ -225,3 +225,5 @@ Para dúvidas ou problemas, consulte:
 - `SLACK_SETUP.md` - Configuração do Slack App
 - `src/setup-events.js` - Instruções de eventos
 
+
+

@@ -202,3 +202,5 @@ docker-compose logs -f slack-bot
 
 **🎯 Lembre-se:** O bot DEVE responder a qualquer mensagem na DM, mesmo que seja apenas "search" ou um comando desconhecido. Se não responder, há um problema de configuração ou conectividade.
 
+
+
